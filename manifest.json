@@ -50,7 +50,7 @@
       "default_path": "popup.html"
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "1.6",
+   "version": "1.7",
    "web_accessible_resources": [ {
       "matches": [ "https://www.facebook.com/*" ],
       "resources": [ "popup.html", "styles.css", "images/*" ]
