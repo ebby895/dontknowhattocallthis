@@ -15626,6 +15626,83 @@ daysActive: ${daysActive}`,
   }
 }
 
+// One-time cleanup: remove ADS rules left behind for listings that no longer
+// exist (deleted from Saved Listings some time ago, but the daily/forever
+// schedule rule itself never got removed because it had already stopped
+// rendering in the popup UI). These orphaned "everyday, forever" rules are
+// what kept producing zero-alarm rebuilds and endless boot-restore retries.
+async function ffmAdsPruneOrphanedForeverRules(reason = "unknown") {
+  try {
+    if (globalThis.__ffmAdsPruneRunning) return { pruned: 0, checked: 0 };
+    globalThis.__ffmAdsPruneRunning = true;
+    try {
+      const [rulesSnap, savedSnap, canonicalSnap] = await Promise.all([
+        new Promise((res) => { try { chrome.storage.local.get([FFM_ADS_RULES_KEY], res); } catch (e) { res({}); } }),
+        new Promise((res) => { try { chrome.storage.local.get(['ffm_saved_listings', 'listings'], res); } catch (e) { res({}); } }),
+        new Promise((res) => { try { chrome.storage.local.get(['ffmCanonicalListings'], res); } catch (e) { res({}); } })
+      ]);
+
+      const rules = (rulesSnap && rulesSnap[FFM_ADS_RULES_KEY]) ? rulesSnap[FFM_ADS_RULES_KEY] : {};
+      const savedArr = Array.isArray(savedSnap && savedSnap.ffm_saved_listings)
+        ? savedSnap.ffm_saved_listings
+        : (Array.isArray(savedSnap && savedSnap.listings) ? savedSnap.listings : []);
+      const canonicalMap = (canonicalSnap && canonicalSnap.ffmCanonicalListings && typeof canonicalSnap.ffmCanonicalListings === 'object')
+        ? canonicalSnap.ffmCanonicalListings
+        : {};
+
+      const validIds = new Set();
+      try {
+        for (const l of savedArr) {
+          if (!l) continue;
+          if (l.id) validIds.add(String(l.id));
+          if (l.listingId) validIds.add(String(l.listingId));
+        }
+      } catch (e) {}
+      try {
+        for (const k of Object.keys(canonicalMap || {})) validIds.add(String(k));
+      } catch (e) {}
+
+      let checked = 0;
+      let pruned = 0;
+      const toClearAlarms = [];
+      for (const [listingId, rule] of Object.entries(rules || {})) {
+        checked++;
+        if (!rule || !rule.enabled) continue;
+        const daysActive = Number(rule.daysActive || 1);
+        const isEveryday = daysActive <= 1;
+        const isForever = rule.repeat !== false && rule.repeat !== 'once' && !rule.runOnce;
+        if (!isEveryday || !isForever) continue;
+        if (validIds.has(String(listingId))) continue;
+
+        // Rule references a listing that no longer exists anywhere (Saved
+        // Listings or canonical/active listings) — this is exactly the
+        // "schedule that was never deleted" case. Remove it.
+        delete rules[listingId];
+        toClearAlarms.push(listingId);
+        pruned++;
+        try { console.warn('[FFM Scheduler] Pruned orphaned daily/forever ADS rule', { listingId, title: rule.listingTitle || null, reason }); } catch (e) {}
+      }
+
+      if (pruned > 0) {
+        try { await new Promise((r) => { try { chrome.storage.local.set({ [FFM_ADS_RULES_KEY]: rules }, r); } catch (e) { r(); } }); } catch (e) {}
+        await Promise.all(toClearAlarms.map((listingId) => Promise.all([
+          new Promise((r) => { try { chrome.alarms.clear(ffmAdsAlarmNameFor(listingId), () => r(true)); } catch (e) { r(false); } }),
+          new Promise((r) => { try { chrome.alarms.clear(ffmAdsPrewarmAlarmName(listingId), () => r(true)); } catch (e) { r(false); } }),
+          new Promise((r) => { try { chrome.storage.local.remove('ffm_alarm_meta_' + ffmAdsAlarmNameFor(listingId), () => r(true)); } catch (e) { r(false); } })
+        ])));
+        try { console.warn('[FFM Scheduler] ADS orphaned-rule cleanup complete', { checked, pruned }); } catch (e) {}
+      }
+
+      return { checked, pruned };
+    } finally {
+      globalThis.__ffmAdsPruneRunning = false;
+    }
+  } catch (e) {
+    try { console.warn('[FFM Scheduler] ffmAdsPruneOrphanedForeverRules error', e); } catch (er) {}
+    return { checked: 0, pruned: 0 };
+  }
+}
+
 // Wrapper to prevent multiple ADS rebuilds running on the same startup
 async function ffmAdsRebuildAllAlarms(reason = "unknown") {
   try {
@@ -17082,7 +17159,30 @@ function ffmEndSDnR(runKey) {
     try {
       // single-flight promise so startup cannot double-run/skip
       globalThis.__ffm_ads_boot_rebuild_p = null;
-      globalThis.__ffm_ads_boot_retries = 0;
+
+      // Retry count is persisted in chrome.storage.local (NOT just globalThis)
+      // because the MV3 service worker gets torn down and respawned on its
+      // own schedule (idle timeout, alarms, etc.). An in-memory counter reset
+      // to 0 on every respawn meant the "retry up to 3 times" cap never
+      // actually held — each new SW instance started the count over, so a
+      // rule set that could never produce an alarm retried forever.
+      const FFM_ADS_BOOT_RETRY_KEY = 'ffm_ads_boot_retry_state';
+      const FFM_ADS_BOOT_MAX_RETRIES = 3;
+      const FFM_ADS_BOOT_RETRY_RESET_MS = 10 * 60 * 1000; // treat as a fresh problem after 10 min
+
+      async function ffmAdsGetBootRetryCount() {
+        try {
+          const res = await new Promise((r) => { try { chrome.storage.local.get([FFM_ADS_BOOT_RETRY_KEY], r); } catch (e) { r({}); } });
+          const state = res && res[FFM_ADS_BOOT_RETRY_KEY];
+          if (!state || typeof state.count !== 'number') return 0;
+          if (state.ts && (Date.now() - Number(state.ts)) > FFM_ADS_BOOT_RETRY_RESET_MS) return 0;
+          return state.count;
+        } catch (e) { return 0; }
+      }
+
+      async function ffmAdsSetBootRetryCount(count) {
+        try { await new Promise((r) => { try { chrome.storage.local.set({ [FFM_ADS_BOOT_RETRY_KEY]: { count, ts: Date.now() } }, r); } catch (e) { r(); } }); } catch (e) {}
+      }
 
       async function ffmAdsBootRestore(reason) {
         // If one is already in progress, join it (do NOT skip)
@@ -17102,6 +17202,12 @@ function ffmEndSDnR(runKey) {
             // Give storage/canonical caches a moment to hydrate on boot
             // (avoid rebuilding from empty rules)
             await new Promise(r => setTimeout(r, 800));
+
+            // Clean up any daily/forever rules left behind for listings that
+            // no longer exist before attempting to rebuild alarms from them —
+            // this is what was causing zero-alarm rebuilds to retry forever.
+            let pruneInfo = null;
+            try { pruneInfo = await ffmAdsPruneOrphanedForeverRules(reason); } catch (e) {}
 
             // Wait for ADS core readiness flag AND the rebuild function itself
             async function waitForAdsReadyAndFn(timeoutMs = 20000, intervalMs = 250) {
@@ -17246,10 +17352,14 @@ function ffmEndSDnR(runKey) {
 
               // If fallback did not create alarms, continue with retry/backoff as before
               if (!stats) {
-                if (globalThis.__ffm_ads_boot_retries < 3) {
-                  globalThis.__ffm_ads_boot_retries++;
-                  const backoffMs = 1500 * globalThis.__ffm_ads_boot_retries;
+                const retryCount = await ffmAdsGetBootRetryCount();
+                if (retryCount < FFM_ADS_BOOT_MAX_RETRIES) {
+                  const nextCount = retryCount + 1;
+                  await ffmAdsSetBootRetryCount(nextCount);
+                  const backoffMs = 1500 * nextCount;
                   setTimeout(() => { try { ffmAdsBootRestore('boot-wait-retry'); } catch (e) {} }, backoffMs);
+                } else {
+                  console.warn('[FFM Scheduler] ADS boot restore: giving up after', FFM_ADS_BOOT_MAX_RETRIES, 'retries (persisted across service-worker restarts). Run ffmAdsRebuildAllAlarms() manually if this is unexpected.');
                 }
                 return null;
               }
@@ -17381,18 +17491,38 @@ function ffmEndSDnR(runKey) {
 
             // If we ended up with zero ADS alarms, retry a few times.
             // This handles the case where rules haven't loaded yet at the first boot tick.
-            if (adsCount === 0 && globalThis.__ffm_ads_boot_retries < 3) {
-              globalThis.__ffm_ads_boot_retries++;
-              const backoffMs = 1500 * globalThis.__ffm_ads_boot_retries;
+            // NOTE: use dailyCount (the actual "ffm_auto_dnr_daily::" relist alarms),
+            // not adsCount — adsCount only counts "ffm_ads_" prewarm alarms, which
+            // legitimately don't exist when the next run is under a minute away,
+            // and was causing retries to fire even when real alarms were present.
+            if (dailyCount > 0) {
+              // Success — clear the persisted retry counter so a real future
+              // problem gets its own fresh set of retries.
+              try { await ffmAdsSetBootRetryCount(0); } catch (e) {}
+            } else if (pruneInfo && pruneInfo.checked > 0 && pruneInfo.checked === pruneInfo.pruned) {
+              // Every rule that existed was an orphaned daily/forever rule and
+              // just got deleted — zero alarms is now the correct, expected
+              // state, not a boot-ordering race. Don't retry.
+              console.warn('[FFM Scheduler] No ADS alarms after boot restore, but all rules were orphaned and pruned — nothing left to schedule.');
+              try { await ffmAdsSetBootRetryCount(0); } catch (e) {}
+            } else {
+              const retryCount = await ffmAdsGetBootRetryCount();
+              if (retryCount < FFM_ADS_BOOT_MAX_RETRIES) {
+                const nextCount = retryCount + 1;
+                await ffmAdsSetBootRetryCount(nextCount);
+                const backoffMs = 1500 * nextCount;
 
-              console.warn('[FFM Scheduler] ⚠️ ADS alarms missing after boot restore — retrying', {
-                attempt: globalThis.__ffm_ads_boot_retries,
-                backoffMs
-              });
+                console.warn('[FFM Scheduler] ⚠️ ADS alarms missing after boot restore — retrying', {
+                  attempt: nextCount,
+                  backoffMs
+                });
 
-              setTimeout(() => {
-                try { ffmAdsBootRestore('boot-retry'); } catch (e) {}
-              }, backoffMs);
+                setTimeout(() => {
+                  try { ffmAdsBootRestore('boot-retry'); } catch (e) {}
+                }, backoffMs);
+              } else {
+                console.warn('[FFM Scheduler] ADS boot restore: giving up after', FFM_ADS_BOOT_MAX_RETRIES, 'retries (persisted across service-worker restarts). Run ffmAdsRebuildAllAlarms() manually if this is unexpected.');
+              }
             }
 
             return stats;
