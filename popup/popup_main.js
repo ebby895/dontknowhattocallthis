@@ -3935,6 +3935,8 @@ const statusBar = document.getElementById('statusbar');
 // the top entry (and manifest.json's "version") together with every release —
 // this is what the user sees in-app, not just the zip filename.
 const FFM_VERSION_CHANGELOG = [
+  { version: '1.6', desc: 'Import All From Folder no longer drops a listing outright on a transient read error: it retries flaky reads a few times, and if listing.json still can\'t be read but photos/videos are present, recovers them under a stub listing instead of losing them (fixes 99/119 partial imports).' },
+  { version: '1.5', desc: 'Import All From Folder was silently swallowing the real reason a listing failed to import (logged as "[object DOMException]"); now logs the actual error name/message so a partial import (e.g. 99 of 119) can be diagnosed.' },
   { version: '1.4', desc: 'Fixed a bug where every new photo/video save (and Import All From Folder) silently failed because saving required a logged-in cloud user that no longer exists; now defaults to a local user context.' },
   { version: '1.3', desc: 'Fixed missed-scheduled-task notifications reappearing every time the extension restarted instead of only once.' },
   { version: '1.2', desc: 'Added this version/update info box to Settings.' },
