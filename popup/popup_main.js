@@ -3935,6 +3935,7 @@ const statusBar = document.getElementById('statusbar');
 // the top entry (and manifest.json's "version") together with every release —
 // this is what the user sees in-app, not just the zip filename.
 const FFM_VERSION_CHANGELOG = [
+  { version: '1.8', desc: 'Reverted the v1.7 long-retry change: measured to add ~11 minutes to a 119-listing import while fixing nothing, since the same folders fail instantly on the first attempt every time (not a timing/download issue). Back to a short retry for genuinely transient errors only.' },
   { version: '1.7', desc: 'Import All From Folder now waits up to ~16s (exponential backoff) per file instead of ~1.5s before giving up, since folders restored from a Google Drive backup can have cloud-only placeholder files that take real time to download.' },
   { version: '1.6', desc: 'Import All From Folder no longer drops a listing outright on a transient read error: it retries flaky reads a few times, and if listing.json still can\'t be read but photos/videos are present, recovers them under a stub listing instead of losing them (fixes 99/119 partial imports).' },
   { version: '1.5', desc: 'Import All From Folder was silently swallowing the real reason a listing failed to import (logged as "[object DOMException]"); now logs the actual error name/message so a partial import (e.g. 99 of 119) can be diagnosed.' },
