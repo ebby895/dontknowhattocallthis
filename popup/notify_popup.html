@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AutoList Pro Notifications</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <div style="min-width:360px;min-height:280px;background:transparent;padding:18px;box-sizing:border-box;">
+    <div class="card" style="border-radius:12px;overflow:hidden;max-height:84vh;display:flex;flex-direction:column;">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:transparent;border-bottom:1px solid #eee;">
+        <strong style="font-size:16px">Notifications</strong>
+        <div>
+          <button id="notify-close" class="action-btn" style="padding:6px 10px;font-size:13px;">Close</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:12px;overflow:auto;">
+        <div id="list">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <script src="popup/notify_popup.js"></script>
+</body>
+</html>
