@@ -1,1 +1,0 @@
-console.log("[AutoList Pro] popup_events.js loaded");

@@ -1,1 +1,0 @@
-console.log("[AutoList Pro] scrape_actions.js loaded");
