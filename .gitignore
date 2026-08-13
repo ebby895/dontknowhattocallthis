@@ -1,0 +1,6 @@
+.claude/settings.local.json
+Thumbs.db
+.DS_Store
+*.log
+node_modules/
+.tmp.driveupload/

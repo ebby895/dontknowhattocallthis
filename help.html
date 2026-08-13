@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Keep Chrome running for scheduled publishes — AutoList Pro</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+        color: #222;
+        background: #f6f8fb;
+        margin: 0;
+      }
+  .wrap { width:100%; max-width: 880px; margin: 20px auto; background:#fff; border:1px solid rgba(0,0,0,0.06); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,0.06); }
+      .inner { padding: 20px; text-align:left; }
+      h1 { margin: 0 0 8px; font-size: 20px; color:#0b3b57; }
+      h2 { margin: 14px 0 6px; font-size: 16px; color:#0b3b57; }
+      .small { font-size:13px; color:#445; }
+      figure { display:block; margin: 12px auto; text-align:center; }
+      figure img { max-width: 100%; height: auto; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+      pre.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f9fc; padding:10px; border-radius:6px; border:1px solid #eef2f7; overflow:auto; }
+      .note { background:#fff3cd; color:#664d03; border:1px solid #ffec99; padding:10px; border-radius:6px; }
+      .hr { height:1px; background:#eee; margin: 14px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="inner">
+        <h1>Keep Chrome running for scheduled publishes</h1>
+  <p class="small">Scheduled publishes require the browser (and the extension) to be active at the scheduled time. If the computer sleeps, hibernates, or the browser profile is closed, scheduled publishes won't run. This page explains how to reduce the chance of missed publishes.</p>
+
+        <h2>Why this matters</h2>
+        <p class="small">Chrome extensions execute inside the browser process. If the browser is closed, the profile is logged out, or the OS suspends the machine, the extension can't run background tasks or trigger scheduled publishes. Chrome does NOT need to be visible. Tasks will work from background or minimized tab state.</p>
+
+        <div class="hr"></div>
+        <h2>Windows (recommended settings)</h2>
+        <ol>
+          <li>Open <strong>Settings → System → Power &amp; battery</strong> (or search <em>Power &amp; sleep</em>).</li>
+          <li>Under <em>Screen and sleep</em>, set <strong>When plugged in, put the device to sleep</strong> to <strong>Never</strong> (or a value longer than your scheduled publish window).</li>
+          <li>Optional: increase the timeout for <em>On battery power</em> if you expect publishes while on battery (this will affect battery life).</li>
+          <li>Ensure sleep and hibernate are disabled (or set to a timeout longer than your scheduled publish window).</li>
+          <li>Keep Chrome open. You may still lock your PC — scheduled publishes can run while the screen is locked as long as the machine is not sleeping or hibernating.</li>
+        </ol>
+
+        <figure role="img" aria-label="Popup schedule dialog screenshot">
+          <img src="images/help/schedule-settings.png" alt="Popup schedule dialog showing action and scheduled time" loading="lazy" width="760" height="420" />
+          <figcaption class="small">Popup schedule dialog — shows action and date/time fields (file: <code>images/help/schedule-settings.png</code>).</figcaption>
+        </figure>
+
+        <h2>macOS (recommended settings)</h2>
+        <ol>
+          <li>Open <strong>System Settings → Displays</strong> (Ventura+) or <strong>System Preferences → Energy Saver</strong> (older macOS).</li>
+          <li>Enable <em>Prevent your Mac from automatically sleeping when the display is off</em> or uncheck options that put the computer to sleep automatically.</li>
+          <li>In <strong>Battery</strong> settings, increase the display sleep timeout or disable automatic sleep while plugged in.</li>
+          <li>Keep Chrome running. You may lock your Mac — scheduled publishes can run while the screen is locked as long as automatic sleep/hibernation is disabled.</li>
+        </ol>
+
+        <figure role="img" aria-label="Power settings screenshot">
+          <img src="images/help/power-settings.png" alt="Power settings panel showing sleep options" loading="lazy" width="760" height="420" />
+          <figcaption class="small">Power &amp; Sleep / Energy settings — set sleep to Never or increase timeout (file: <code>images/help/power-settings.png</code>).</figcaption>
+        </figure>
+
+        <p class="small">Quick note: the important settings are to disable sleep and hibernate and keep Chrome running with the profile that has the AutoList Pro extension active. Locking the screen is fine; just ensure the machine does not sleep or hibernate.</p>
+
+        <div class="note">Warning: Preventing sleep or disabling lock reduces security and increases power usage. Apply these settings only on trusted machines and consider reverting them after the scheduled publish completes.</div>
+
+        <div class="hr"></div>
+        <h2>Restore schedule warning</h2>
+        <p class="small">If you previously chose <strong>Don't show this again</strong> for the schedule warning and want to see it again, open the extension Menu and look for the setting to reset warnings (or clear the extension's local storage for <code>schedule_hide_warning</code>).</p>
+
+        <div class="hr"></div>
+        <p class="small">Still having trouble? Open the extension popup and check the Scheduled Tasks list to confirm the publish is scheduled. If it repeatedly fails, consider running Chrome on a machine with predictable uptime or contacting support with the publish timestamp and any extension logs.</p>
+        <p class="small" style="margin-top:10px;">Quick helpers: <a href="#" id="sleepHelpLink">Open OS sleep/hibernate help</a></p>
+      </div>
+    </div>
+    <script src="help.js"></script>
+  </body>
+</html>

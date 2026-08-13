@@ -1,0 +1,1 @@
+console.log("[AutoList Pro] dom_helpers.js loaded");
