@@ -270,8 +270,38 @@ function hasUsableVars(keys, result) {
   return keys.some(k => result[k] != null);
 }
 
+// A reader tab loading one of these runs our own content script, which calls
+// straight back into here. That is what produced the runaway tab storm:
+// ensureDocIds() asks for Relay operation ids that do not live on the selling
+// page, the "did we get everything" check fails, we open a reader tab, and its
+// content script asks for the very same missing ids. Never again.
+function isContentScriptUrl(url) {
+  try {
+    const p = new URL(url).pathname.toLowerCase();
+    return p.includes("/marketplace/you/selling") ||
+           p.includes("/marketplace/seller/listings") ||
+           p.includes("/marketplace/selling");
+  } catch (e) {
+    return false;
+  }
+}
+
+// Absolute ceiling, independent of every other guard. If this ever trips,
+// something upstream is looping and we stop rather than fill the tab strip.
+const MAX_CONCURRENT_READER_TABS = 2;
+
 async function openReaderTabOnce(url, keys, options) {
   if (inFlightReaderTabs.has(url)) return inFlightReaderTabs.get(url);
+
+  if (isContentScriptUrl(url)) {
+    console.warn("[Relistify] refusing reader tab for a content-script page:", url);
+    return {};
+  }
+
+  if (readerTabIds.size >= MAX_CONCURRENT_READER_TABS) {
+    console.warn("[Relistify] reader tab ceiling reached; refusing to open more.");
+    return {};
+  }
 
   const promise = (async () => {
     const tempTabId = await openTempTab(url);
