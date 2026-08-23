@@ -62,6 +62,28 @@
       if (Number.isFinite(n) && unit) return ref - n * unit;
     }
 
+    // Numeric "listed on 7/26" — the form Facebook actually uses on the selling
+    // page. Confirmed against a real capture: "Active \u00b7 Listed on 7/26".
+    // Assume US month/day; if the first number cannot be a month, swap.
+    const slash = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    if (slash) {
+      let month = parseInt(slash[1], 10);
+      let day = parseInt(slash[2], 10);
+      if (month > 12 && day <= 12) { const tmp = month; month = day; day = tmp; }
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const refDate = new Date(ref);
+        let year = refDate.getFullYear();
+        if (slash[3]) {
+          year = parseInt(slash[3], 10);
+          if (year < 100) year += 2000;
+        }
+        const d = new Date(year, month - 1, day);
+        // No year given and the date lands ahead of now — it was last year.
+        if (!slash[3] && d.getTime() > ref) d.setFullYear(year - 1);
+        if (!isNaN(d.getTime())) return d.getTime();
+      }
+    }
+
     // "5 august" / "august 5" / "5 august 2025"
     const monthNames = Object.keys(MONTHS).join("|");
     let abs = t.match(new RegExp("\\b(\\d{1,2})\\s+(" + monthNames + ")(?:\\s+(\\d{4}))?\\b"));
@@ -377,7 +399,10 @@
         .filter(t => t !== priceLine && !DATE_HINT.test(t) && t.length > 2)
         .sort((x, y) => y.length - x.length)[0] || "";
 
-      const img = card.querySelector("img");
+      // Facebook CDN images only — avoids grabbing avatars, icons and spacers.
+      const img = Array.from(card.querySelectorAll("img"))
+        .find(i => /fbcdn|scontent/.test(i.getAttribute("src") || "")) ||
+        card.querySelector("img");
       out.set(id, {
         id,
         title: title.trim(),

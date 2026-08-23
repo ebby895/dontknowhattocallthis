@@ -25,7 +25,10 @@ async function handleOpenMarketplace(e) {
   // Always open a fresh tab. Reusing an existing Marketplace tab meant the
   // scan could start against a half-navigated page (and clobbered whatever
   // the user had open there).
-  const targetUrl = "https://www.facebook.com/marketplace/you/selling/";
+  // Filtered + sorted view, taken from the user's own capture script: live and
+  // in-stock only, newest first. Fewer irrelevant cards for the scan to sift.
+  const targetUrl = "https://www.facebook.com/marketplace/you/selling?" +
+    "state=LIVE&status[0]=IN_STOCK&order=CREATION_TIMESTAMP_DESC";
   try {
     await chrome.tabs.create({ url: targetUrl, active: true });
   } catch (err) {
