@@ -214,18 +214,35 @@ async function executeReadScriptOnTab(tabId, keys, options) {
               scriptsCount += 1;
             } catch (e) {}
           }
-          return { values, scriptsCount, matchedKeys };
+          return {
+            values,
+            diagnostic: {
+              path: location.pathname,
+              readyState: document.readyState,
+              scripts: scriptNodes.length,
+              parseable: scriptsCount,
+              matches: matchedKeys,
+              qualified: Object.keys(values).length
+            }
+          };
         };
 
         const maxWait = Math.max(0, Number(opts.wait_ms) || 0);
         const deadline = Date.now() + maxWait;
         while (true) {
-          const { values } = scanScripts();
+          const { values, diagnostic } = scanScripts();
           if (requestedKeys.every(k => values[k] != null)) {
             return values;
           }
           if (Date.now() >= deadline) {
-            return Object.fromEntries(requestedKeys.map(k => [k, values[k] ?? null]));
+            // Report why the read came up empty: how many script tags existed,
+            // how many parsed, how many carried a requested key, and how many
+            // of those passed required_property. Guessing at this from the
+            // outside is what made the empty-listing case so hard to pin down.
+            return {
+              ...Object.fromEntries(requestedKeys.map(k => [k, values[k] ?? null])),
+              __diagnostic: diagnostic
+            };
           }
           await new Promise(r => setTimeout(r, 250));
         }
@@ -379,6 +396,9 @@ async function readPageVar(key, url, options, senderTab, allowReaderTab) {
 
   const promise = (async () => {
     const vars = await extractPageVariables([key], url, options, senderTab, allowReaderTab);
+    if (vars.__diagnostic) {
+      console.warn(`[Relistify][READ] "${key}" not found on ${url}:`, vars.__diagnostic);
+    }
     const val = vars[key];
     if (val != null) {
       setCachedVar(key, url, val);
