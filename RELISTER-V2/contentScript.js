@@ -101,11 +101,11 @@
   // --------------------------------------------------------------------------
   // 2. Token & Page Variable Acquisition (MAIN world Bridge)
   // --------------------------------------------------------------------------
-  async function requestPageVar(key, url, options = {}) {
+  async function requestPageVar(key, url, options = {}, allowReaderTab = false) {
     try {
       const res = await chrome.runtime.sendMessage({
         kind: MSG.READ_PAGE_VAR,
-        args: { key, url: url || location.href, options }
+        args: { key, url: url || location.href, options, allowReaderTab }
       });
       if (res && res.error) throw new Error(res.error);
       return res;
@@ -114,11 +114,11 @@
     }
   }
 
-  async function requestPageVars(keys, url, options = {}) {
+  async function requestPageVars(keys, url, options = {}, allowReaderTab = false) {
     try {
       const res = await chrome.runtime.sendMessage({
         kind: MSG.READ_PAGE_VARS,
-        args: { keys, url: url || location.href, options }
+        args: { keys, url: url || location.href, options, allowReaderTab }
       });
       if (res && res.error) throw new Error(res.error);
       return res || {};
@@ -127,7 +127,7 @@
     }
   }
 
-  async function ensureTokens() {
+  async function ensureTokens(allowReaderTab = false) {
     if (STATE.fbDtsg && STATE.userId) return true;
 
     try {
@@ -142,7 +142,7 @@
 
     if (!STATE.fbDtsg || !STATE.userId) {
       const targetUrl = "https://www.facebook.com/marketplace/you/selling/";
-      const vars = await requestPageVars(["DTSGInitialData", "CurrentUserInitialData", "LSD"], targetUrl);
+      const vars = await requestPageVars(["DTSGInitialData", "CurrentUserInitialData", "LSD"], targetUrl, {}, allowReaderTab);
       if (vars.DTSGInitialData?.token) {
         STATE.fbDtsg = vars.DTSGInitialData.token;
       }
@@ -158,7 +158,7 @@
           const jsonVars = await requestPageVar("marketplace_product_details_page", targetUrl, {
             inline_json: true,
             wait_ms: 3000
-          });
+          }, allowReaderTab);
           if (jsonVars?.target?.marketplace_id) {
             STATE.marketplaceId = jsonVars.target.marketplace_id;
           }
@@ -185,11 +185,11 @@
       }
     }
 
-    await ensureDocIds();
+    await ensureDocIds(allowReaderTab);
     return Boolean(STATE.fbDtsg && STATE.userId);
   }
 
-  async function ensureDocIds() {
+  async function ensureDocIds(allowReaderTab = false) {
     try {
       const cached = (await chrome.storage.local.get(STORAGE_KEYS.DOC_ID_CACHE))[STORAGE_KEYS.DOC_ID_CACHE];
       if (cached && cached.expiry > Date.now() && cached.docIds) {
@@ -205,7 +205,7 @@
 
     if (neededOperations.length > 0) {
       const targetUrl = "https://www.facebook.com/marketplace/you/selling/";
-      const harvested = await requestPageVars(neededOperations, targetUrl);
+      const harvested = await requestPageVars(neededOperations, targetUrl, {}, allowReaderTab);
       if (harvested.useCometMarketplaceForSaleItemDeleteMutation_facebookRelayOperation) {
         STATE.docIds.deleteListing = harvested.useCometMarketplaceForSaleItemDeleteMutation_facebookRelayOperation;
       }
@@ -362,6 +362,10 @@
       } catch (e) {}
     }
 
+    const domFound = listings.length;
+    console.log("[Relistify] scan: DOM pass found", domFound, "listings from",
+      document.querySelectorAll('script[type="application/json"]').length, "json blobs");
+
     // First paint from DOM data alone — the box is on screen from here on.
     STATE.activeListings = listings;
     STATE.activeListingsMap = Object.fromEntries(listings.map(l => [l.id, l]));
@@ -391,6 +395,15 @@
     STATE.activeListings = listings;
     STATE.activeListingsMap = Object.fromEntries(listings.map(l => [l.id, l]));
     STATE.scanState = listings.length > 0 ? "ready" : "empty";
+    console.log("[Relistify] scan complete:", {
+      domFound,
+      afterGraphQL: listings.length,
+      haveDtsg: Boolean(STATE.fbDtsg),
+      haveUserId: Boolean(STATE.userId),
+      staleDays: STATE.staleDays,
+      staleCount: getStaleListings().length,
+      ages: listings.map(l => l.ageDays)
+    });
 
     // Cache listings
     chrome.storage.local.set({
@@ -632,6 +645,9 @@
     if (STATE.isRelisting) return;
 
     STATE.isRelisting = true;
+    // The one place reader tabs are permitted. runBatchRelist is serial, so
+    // this is at most one listing's worth of tabs at a time.
+    await ensureTokens(true);
     showOverlay(true);
 
     let successCount = 0;
@@ -884,7 +900,11 @@
 
     const scanLine =
       STATE.scanState === "scanning" ? `<div class="rlf-scan-status is-busy">Scanning your listings\u2026</div>` :
-      STATE.scanState === "empty"    ? `<div class="rlf-scan-status is-empty">No active listings found. Try \u21bb Refresh.</div>` : "";
+      STATE.scanState === "empty"    ? `<div class="rlf-scan-status is-empty">${
+          STATE.fbDtsg && STATE.userId
+            ? "No active listings found. Try \u21bb Refresh."
+            : "Couldn\u2019t read Facebook session tokens \u2014 reload this page while logged in."
+        }</div>` : "";
 
     const listRows = STATE.activeListings.map(l => {
       const sel = STATE.selectedIds.has(l.id);

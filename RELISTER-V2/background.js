@@ -322,7 +322,7 @@ async function openReaderTabOnce(url, keys, options) {
   }
 }
 
-async function extractPageVariables(keys, url, options, senderTab) {
+async function extractPageVariables(keys, url, options, senderTab, allowReaderTab) {
   // The caller is already sitting on the page we would open. Read it in place.
   const senderIsOnTarget =
     senderTab?.id != null &&
@@ -350,10 +350,17 @@ async function extractPageVariables(keys, url, options, senderTab) {
     }
   }
 
+  // Reader tabs are opt-in and only the relist flow opts in. Scanning the
+  // selling page must never open a tab: everything it needs is on the page
+  // the caller is already looking at.
+  if (!allowReaderTab) {
+    return {};
+  }
+
   return openReaderTabOnce(url, keys, options);
 }
 
-async function readPageVar(key, url, options, senderTab) {
+async function readPageVar(key, url, options, senderTab, allowReaderTab) {
   const cached = getCachedVar(key, url);
   if (cached !== null) return cached;
 
@@ -363,7 +370,7 @@ async function readPageVar(key, url, options, senderTab) {
   }
 
   const promise = (async () => {
-    const vars = await extractPageVariables([key], url, options, senderTab);
+    const vars = await extractPageVariables([key], url, options, senderTab, allowReaderTab);
     const val = vars[key];
     if (val != null) {
       setCachedVar(key, url, val);
@@ -380,11 +387,11 @@ async function readPageVar(key, url, options, senderTab) {
   }
 }
 
-async function readPageVars(keys, url, options, senderTab) {
+async function readPageVars(keys, url, options, senderTab, allowReaderTab) {
   const { found, missing } = getCachedVars(keys, url);
   if (missing.length === 0) return found;
 
-  const extracted = await extractPageVariables(missing, url, options, senderTab);
+  const extracted = await extractPageVariables(missing, url, options, senderTab, allowReaderTab);
   for (const [k, v] of Object.entries(extracted)) {
     if (v != null) setCachedVar(k, url, v);
   }
@@ -450,7 +457,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const key = args?.key;
       const url = args?.url;
       const opts = args?.options;
-      readPageVar(key, url, opts, sender.tab)
+      readPageVar(key, url, opts, sender.tab, args?.allowReaderTab === true)
         .then(result => sendResponse(result))
         .catch(err => sendResponse({ error: err.message || String(err) }));
       return true;
@@ -464,7 +471,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ error: "No keys requested." });
         return true;
       }
-      readPageVars(keys, url, opts, sender.tab)
+      readPageVars(keys, url, opts, sender.tab, args?.allowReaderTab === true)
         .then(result => sendResponse(result))
         .catch(err => sendResponse({ error: err.message || String(err) }));
       return true;
