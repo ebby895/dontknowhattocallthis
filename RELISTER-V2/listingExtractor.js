@@ -206,13 +206,112 @@
 
   const DATE_HINT = /(listed|posted|created)\b|(\bago\b)|\byesterday\b|\btoday\b/i;
 
-  function findCardRoot(anchor) {
+  const SKIP_TAGS = new Set([
+    "BASE", "HEAD", "LINK", "META", "STYLE", "TITLE", "CANVAS", "NOSCRIPT", "SCRIPT"
+  ]);
+
+  function isVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    if (SKIP_TAGS.has(el.tagName)) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const cs = el.ownerDocument.defaultView?.getComputedStyle(el);
+    if (cs && (cs.display === "none" || cs.visibility === "hidden")) return false;
+    return true;
+  }
+
+  // Visual reading order, not DOM order — a grid's DOM can be shuffled.
+  function sortGeometrically(els) {
+    return els.slice().sort((a, b) => {
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      const rowA = Math.round(ra.top / 20), rowB = Math.round(rb.top / 20);
+      return rowA !== rowB ? rowA - rowB : ra.left - rb.left;
+    });
+  }
+
+  // Only text this element owns, not the concatenation of every descendant.
+  // Without this a wrapping <div> swallows the whole card into one "title".
+  function directTextOnly(el) {
+    if (!el) return "";
+    let out = "";
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) out += node.nodeValue;
+    }
+    return out.trim();
+  }
+
+  // Every element that owns text, in reading order — the raw material for
+  // picking out title / price / date without knowing Facebook's class names.
+  function ownTextNodes(root) {
+    const out = [];
+    const walker = root.ownerDocument.createTreeWalker(root, 1 /* ELEMENT */);
+    let el = root;
+    while (el) {
+      const t = directTextOnly(el);
+      if (t && isVisible(el)) out.push({ el, text: t });
+      el = walker.nextNode();
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Repeating-group detection
+  //
+  // Borrowed from how general-purpose scrapers find a list without being told:
+  // an element is a list container when enough of its children are structurally
+  // alike. Fingerprints are tried in order and the one matching the most
+  // children wins. This is why the reader survives Facebook renaming classes —
+  // it never needs to know a class name.
+  // ---------------------------------------------------------------------------
+
+  const MIN_ITEMS = 2;
+
+  function fingerprintByLinkOffset(child) {
+    const a = child.querySelector('a[href*="/marketplace/item/"]') || child.querySelector("a");
+    if (!a) return null;
+    const rc = child.getBoundingClientRect(), ra = a.getBoundingClientRect();
+    // Link offset alone is too weak: a promo tile and a real listing card both
+    // put their anchor at (0,0). Pair it with a coarse card size, rounded
+    // loosely enough that a two-line title does not split the bucket.
+    return `link:${Math.round((ra.left - rc.left) / 10)},${Math.round((ra.top - rc.top) / 10)}` +
+           `:${Math.round(rc.width / 40)}x${Math.round(rc.height / 60)}`;
+  }
+
+  function fingerprintByClass(child) {
+    const c = (child.getAttribute("class") || "").trim();
+    return c ? `class:${c.split(/\s+/).sort().join(" ")}` : null;
+  }
+
+  function fingerprintByShape(child) {
+    const r = child.getBoundingClientRect();
+    return `shape:${Math.round(r.width / 10)}x${Math.round(r.height / 10)}:${child.tagName}`;
+  }
+
+  function largestSimilarGroup(children) {
+    for (const fp of [fingerprintByLinkOffset, fingerprintByClass, fingerprintByShape]) {
+      const buckets = new Map();
+      for (const c of children) {
+        const key = fp(c);
+        if (!key) continue;
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(c);
+      }
+      let best = [];
+      for (const group of buckets.values()) {
+        if (group.length > best.length) best = group;
+      }
+      if (best.length >= MIN_ITEMS) return best;
+    }
+    return [];
+  }
+
+  // The card root for a listing link: the highest ancestor that still contains
+  // exactly this one listing link. Going higher would merge two cards.
+  function cardRootFor(anchor, root) {
     let el = anchor;
-    for (let i = 0; i < 8 && el; i++) {
+    while (el && el.parentElement && el.parentElement !== root) {
       const parent = el.parentElement;
-      if (!parent) break;
-      // Walk up until the subtree is big enough to hold the card's own text.
-      if (parent.querySelectorAll('a[href*="/marketplace/item/"]').length > 1) break;
+      if (parent.querySelectorAll('a[href*="/marketplace/item/"]').length !== 1) break;
       el = parent;
     }
     return el;
@@ -221,45 +320,62 @@
   function fromVisibleCards(doc) {
     const root = doc || document;
     const out = new Map();
-    const anchors = Array.from(root.querySelectorAll('a[href*="/marketplace/item/"]'));
     const now = Date.now();
 
+    const anchors = Array.from(root.querySelectorAll('a[href*="/marketplace/item/"]'))
+      .filter(a => /\/marketplace\/item\/(\d+)/.test(a.getAttribute("href") || ""));
+    if (anchors.length === 0) return [];
+
+    // Card roots, then keep only the structurally similar majority — this drops
+    // "related items" rails and single promo tiles that are not your listings.
+    const cards = [];
+    const seenCards = new Set();
     for (const a of anchors) {
-      const m = (a.getAttribute("href") || "").match(/\/marketplace\/item\/(\d+)/);
+      const card = cardRootFor(a, root.body || root);
+      if (!card || seenCards.has(card)) continue;
+      seenCards.add(card);
+      cards.push(card);
+    }
+
+    let chosen = cards;
+    if (cards.length >= MIN_ITEMS) {
+      const similar = largestSimilarGroup(cards);
+      // Only trust the filter if it kept a real majority; otherwise keep all.
+      if (similar.length >= Math.max(MIN_ITEMS, Math.floor(cards.length * 0.5))) {
+        chosen = similar;
+      }
+    }
+
+    for (const card of sortGeometrically(chosen)) {
+      const a = card.querySelector('a[href*="/marketplace/item/"]');
+      const m = (a?.getAttribute("href") || "").match(/\/marketplace\/item\/(\d+)/);
       if (!m) continue;
       const id = m[1];
       if (out.has(id)) continue;
 
-      const card = findCardRoot(a);
-      if (!card) continue;
+      const texts = ownTextNodes(card).map(t => t.text);
 
-      const text = (card.innerText || "").replace(/ /g, " ");
-      const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+      const priceLine = texts.find(t => /^[^\w]{0,3}[\$£€₱]\s?[\d,.]+/.test(t) || /^free$/i.test(t)) || "";
 
-      // Price: first line that looks like currency.
-      const priceLine = lines.find(l => /^[^\w]{0,3}[\$£€₱]\s?[\d,.]+/.test(l) || /\bfree\b/i.test(l)) || "";
-
-      // Title: longest line that is neither the price nor the date hint.
-      const title = lines
-        .filter(l => l !== priceLine && !DATE_HINT.test(l) && l.length > 2)
-        .sort((x, y) => y.length - x.length)[0] || "";
-
-      // Date: first line carrying a date hint that actually parses.
       let creationTimeMs = null;
-      for (const l of lines) {
-        if (!DATE_HINT.test(l)) continue;
-        const parsed = parseRelativeDate(l, now);
+      for (const t of texts) {
+        if (!DATE_HINT.test(t)) continue;
+        const parsed = parseRelativeDate(t, now);
         if (parsed != null) { creationTimeMs = parsed; break; }
       }
-      // Some layouts put the date in a title/aria attribute instead.
       if (creationTimeMs == null) {
-        const timed = card.querySelector("[title], abbr[data-utime], [data-utime]");
+        const timed = card.querySelector("[data-utime], abbr[title], [title]");
         if (timed) {
           creationTimeMs =
             normalizeTimestamp(timed.getAttribute("data-utime")) ||
             parseRelativeDate(timed.getAttribute("title"), now);
         }
       }
+
+      // Title: the longest own-text line that is not the price and not the date.
+      const title = texts
+        .filter(t => t !== priceLine && !DATE_HINT.test(t) && t.length > 2)
+        .sort((x, y) => y.length - x.length)[0] || "";
 
       const img = card.querySelector("img");
       out.set(id, {
@@ -327,6 +443,9 @@
 
   window.__rlfExtract = {
     extractAll,
+    sortGeometrically,
+    directTextOnly,
+    largestSimilarGroup,
     fromJsonBlobs,
     fromVisibleCards,
     parseRelativeDate,

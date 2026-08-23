@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Delete & Relist Facebook Marketplace \u2014 Relistify V2",
   "short_name": "Relistify V2",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "Local-first Facebook Marketplace relister. Delete and relist your listings in one click \u2014 photos, price drops, details kept intact without external servers or logins.",
   "action": {
     "default_icon": {
@@ -60,5 +60,5 @@
     }
   ],
   "minimum_chrome_version": "88",
-  "version_name": "2.0.4-extractor"
+  "version_name": "2.0.5-similarity"
 }
