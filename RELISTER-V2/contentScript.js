@@ -491,10 +491,13 @@
     let details = null;
 
     try {
+      // The one legitimate reader tab: the item's own page, opened while
+      // relisting that single item. runBatchRelist is serial, so this is one
+      // tab at a time and it closes itself when the read finishes.
       const pageVars = await requestPageVar("marketplace_product_details_page", itemUrl, {
         inline_json: true,
         wait_ms: 4000
-      });
+      }, true);
       if (pageVars?.target) {
         details = pageVars.target;
       }

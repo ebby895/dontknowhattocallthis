@@ -156,7 +156,14 @@ function waitForTabComplete(tabId) {
   });
 }
 
+let readerTabsOpenedTotal = 0;
+
 async function openTempTab(url) {
+  readerTabsOpenedTotal++;
+  console.warn(
+    `[Relistify][TAB #${readerTabsOpenedTotal}] opening reader tab for: ${url}\n` +
+    `  currently open: ${readerTabIds.size} | called from:\n${new Error().stack}`
+  );
   const tab = await chrome.tabs.create({ url, active: false });
   if (!tab.id) throw new Error("Failed to open background reader tab.");
   await waitForTabComplete(tab.id);
@@ -164,6 +171,7 @@ async function openTempTab(url) {
 }
 
 async function safeCloseTab(tabId) {
+  console.warn(`[Relistify][TAB] closing reader tab ${tabId}`);
   try {
     await new Promise(r => setTimeout(r, 100));
     await chrome.tabs.remove(tabId);
