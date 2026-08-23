@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relistify V2</title>
+    <link rel="stylesheet" href="assets/popup.css">
+</head>
+<body class="is-pro">
+    <div class="header">
+        <div class="header-top">
+            <img src="icon-gold48.png" alt="Relistify" class="header-icon">
+            <div class="header-text">
+                <div class="logo">Relistify V2</div>
+                <div class="tagline">Local-First Facebook Marketplace Relister</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="content">
+        <div id="loading" class="loading hidden">
+            <div class="loading-spinner"></div>
+        </div>
+
+        <div id="main-content">
+            <button class="marketplace-btn" id="go-to-marketplace">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <polyline points="15,3 21,3 21,9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="10" y1="14" x2="21" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Open Marketplace Selling
+            </button>
+
+            <div id="welcome-card" class="welcome-card">
+                <div class="welcome-icon">&#10003;</div>
+                <div class="welcome-text">
+                    <div class="welcome-name">Relistify V2 Unlocked</div>
+                    <div class="welcome-status">Unlimited Relisting &bull; Price Drop &bull; Groups Active</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footer-note">100% Local &bull; No Login Required</div>
+        <div class="version" id="version">v2.0.0</div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
