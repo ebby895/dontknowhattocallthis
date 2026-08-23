@@ -45,7 +45,8 @@
       createListing: null,
       composerRoot: null
     },
-    scanState: "idle", // "idle" | "scanning" | "ready" | "empty"
+    scanState: "idle",
+    lastExtractWasDomOnly: false, // "idle" | "scanning" | "ready" | "empty"
     activeListings: [],
     activeListingsMap: {},
     selectedIds: new Set(),
@@ -338,33 +339,36 @@
     const listings = [];
     const seenIds = new Set();
 
-    // 1. Scan from DOM JSON script blobs first for immediate rendering
-    const scriptNodes = Array.from(document.querySelectorAll('script[type="application/json"]'));
-    for (const s of scriptNodes) {
-      try {
-        const json = JSON.parse(s.textContent || "{}");
-        const walk = obj => {
-          if (!obj || typeof obj !== "object") return;
-          if (Array.isArray(obj.edges)) {
-            for (const edge of obj.edges) {
-              if (edge?.node?.id && (edge.node.for_sale_item || edge.node.marketplace_listing_title)) {
-                const parsed = parseListingEdgeNode(edge.node);
-                if (parsed && !seenIds.has(parsed.id) && !recentlyRelisted.has(parsed.id)) {
-                  seenIds.add(parsed.id);
-                  listings.push(parsed);
-                }
-              }
-            }
-          }
-          for (const v of Object.values(obj)) walk(v);
-        };
-        walk(json);
-      } catch (e) {}
+    // 1. Read the page itself — deep JSON walk plus the visible cards. The card
+    //    reader needs no tokens and no particular JSON shape, so it still
+    //    answers when Facebook rearranges things.
+    let extractReport = null;
+    try {
+      const extracted = window.__rlfExtract.extractAll(document);
+      extractReport = extracted.report;
+      // A passive read only sees rendered cards. Say so rather than implying
+      // this is the complete catalogue.
+      STATE.lastExtractWasDomOnly = extracted.report.jsonFound === 0 && extracted.report.domFound > 0;
+      for (const item of extracted.listings) {
+        if (seenIds.has(item.id) || recentlyRelisted.has(item.id)) continue;
+        seenIds.add(item.id);
+        listings.push({
+          id: item.id,
+          title: item.title,
+          formattedPrice: item.formattedPrice,
+          numericPrice: item.numericPrice,
+          creationTimeMs: item.creationTimeMs,
+          ageDays: item.ageDays == null ? null : item.ageDays,
+          photoUrl: item.photoUrl,
+          raw: item
+        });
+      }
+    } catch (e) {
+      console.warn("[Relistify] extractor failed:", e);
     }
 
     const domFound = listings.length;
-    console.log("[Relistify] scan: DOM pass found", domFound, "listings from",
-      document.querySelectorAll('script[type="application/json"]').length, "json blobs");
+    console.log("[Relistify] page extract:", extractReport, "->", domFound, "usable listings");
 
     // First paint from DOM data alone — the box is on screen from here on.
     STATE.activeListings = listings;
@@ -421,7 +425,8 @@
   }
 
   function getStaleListings() {
-    return STATE.activeListings.filter(l => l.ageDays >= STATE.staleDays);
+    // A listing whose date we could not read is never silently counted as stale.
+    return STATE.activeListings.filter(l => l.ageDays != null && l.ageDays >= STATE.staleDays);
   }
 
   function updateBadgeCount() {
@@ -900,6 +905,8 @@
 
     const scanLine =
       STATE.scanState === "scanning" ? `<div class="rlf-scan-status is-busy">Scanning your listings\u2026</div>` :
+      STATE.scanState === "ready" && STATE.lastExtractWasDomOnly
+        ? `<div class="rlf-scan-status is-partial">Read ${STATE.activeListings.length} listing${STATE.activeListings.length === 1 ? "" : "s"} currently on screen. Facebook loads the rest as you scroll \u2014 scroll down, then \u21bb Refresh.</div>` :
       STATE.scanState === "empty"    ? `<div class="rlf-scan-status is-empty">${
           STATE.fbDtsg && STATE.userId
             ? "No active listings found. Try \u21bb Refresh."
@@ -908,7 +915,8 @@
 
     const listRows = STATE.activeListings.map(l => {
       const sel = STATE.selectedIds.has(l.id);
-      const stale = l.ageDays >= STATE.staleDays;
+      const stale = l.ageDays != null && l.ageDays >= STATE.staleDays;
+      const ageText = l.creationTimeMs ? `listed ${formatTimeAgo(l.creationTimeMs)}` : "date unknown";
       return `
         <label class="rlf-listing-row${sel ? " is-sel" : ""}" data-id="${escapeHtml(l.id)}">
           <input type="checkbox" class="rlf-listing-cb" data-id="${escapeHtml(l.id)}"${sel ? " checked" : ""}>
@@ -916,7 +924,7 @@
             <span class="rlf-listing-title">${escapeHtml(l.title || "Untitled listing")}</span>
             <span class="rlf-listing-meta">
               <span>${escapeHtml(l.formattedPrice || "")}</span>
-              <span class="rlf-listing-age${stale ? " is-stale" : ""}">listed ${escapeHtml(formatTimeAgo(l.creationTimeMs) || "\u2014")}</span>
+              <span class="rlf-listing-age${stale ? " is-stale" : ""}${l.creationTimeMs ? "" : " is-unknown"}">${escapeHtml(ageText)}</span>
             </span>
           </span>
         </label>`;
