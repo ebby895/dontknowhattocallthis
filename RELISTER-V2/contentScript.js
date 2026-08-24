@@ -46,7 +46,10 @@
       composerRoot: null
     },
     scanState: "idle",
-    lastExtractWasDomOnly: false, // "idle" | "scanning" | "ready" | "empty"
+    lastExtractWasDomOnly: false,
+    isSweeping: false,
+    sweepCancelled: false,
+    sweepProgress: null, // "idle" | "scanning" | "ready" | "empty"
     activeListings: [],
     activeListingsMap: {},
     selectedIds: new Set(),
@@ -963,6 +966,12 @@
         <div class="rlf-section">
           <div class="rlf-section-title">Listings to Delete &amp; Relist</div>
           ${scanLine}
+          <button class="rlf-chip rlf-sweep" id="rlf-sweep-btn">${
+            STATE.isSweeping
+              ? `Stop loading (${STATE.sweepProgress?.found ?? STATE.activeListings.length} found)`
+              : "\u21f5 Load all listings (scrolls slowly)"
+          }</button>
+          ${STATE.isSweeping ? `<div class="rlf-scan-status is-busy">Walking the page \u2014 ${STATE.sweepProgress?.found ?? 0} found, pass ${STATE.sweepProgress?.rounds ?? 0}. You can keep working.</div>` : ""}
           <div class="rlf-listing-list" id="rlf-listing-list">${listRows}</div>
         </div>
 
@@ -1081,6 +1090,69 @@
 
     container.querySelector("#rlf-price-btn")?.addEventListener("click", () => {
       openPriceDropModal();
+    });
+
+    container.querySelector("#rlf-sweep-btn")?.addEventListener("click", async () => {
+      if (STATE.isSweeping) {
+        STATE.sweepCancelled = true;
+        return;
+      }
+      STATE.isSweeping = true;
+      STATE.sweepCancelled = false;
+      STATE.sweepProgress = { found: STATE.activeListings.length, rounds: 0 };
+      renderPanel();
+
+      try {
+        const recentlyRelisted = await getRecentlyRelistedIds();
+        const result = await window.__rlfExtract.sweep({
+          shouldStop: () => STATE.sweepCancelled,
+          onProgress: p => {
+            STATE.sweepProgress = p;
+            renderPanel();
+          }
+        });
+
+        const kept = result.listings.filter(l => !recentlyRelisted.has(l.id));
+        STATE.activeListings = kept.map(l => ({
+          id: l.id,
+          title: l.title,
+          formattedPrice: l.formattedPrice,
+          numericPrice: l.numericPrice,
+          creationTimeMs: l.creationTimeMs,
+          ageDays: l.ageDays,
+          photoUrl: l.photoUrl,
+          raw: l
+        }));
+        STATE.activeListingsMap = Object.fromEntries(STATE.activeListings.map(l => [l.id, l]));
+        STATE.scanState = STATE.activeListings.length > 0 ? "ready" : "empty";
+        // The sweep covered the whole page, so this is no longer a partial read.
+        STATE.lastExtractWasDomOnly = false;
+
+        console.log("[Relistify] sweep finished:", {
+          found: STATE.activeListings.length,
+          withDates: STATE.activeListings.filter(l => l.creationTimeMs != null).length,
+          rounds: result.rounds,
+          reason: result.reason,
+          seconds: Math.round(result.elapsedMs / 1000)
+        });
+
+        showToast(
+          result.reason === "cancelled"
+            ? `Stopped \u2014 ${STATE.activeListings.length} listings loaded.`
+            : `Loaded ${STATE.activeListings.length} listings.`,
+          result.reason === "cancelled" ? "info" : "success"
+        );
+        updateBadgeCount();
+      } catch (e) {
+        console.warn("[Relistify] sweep failed:", e);
+        showToast("Couldn\u2019t finish loading listings.", "error");
+      } finally {
+        STATE.isSweeping = false;
+        STATE.sweepCancelled = false;
+        STATE.sweepProgress = null;
+        renderPanel();
+        decorateListingCardsInDOM();
+      }
     });
   }
 

@@ -466,7 +466,132 @@
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Paced sweep
+  //
+  // Facebook lazy-loads listing cards and unmounts ones scrolled far off
+  // screen, so a single read only ever sees a window of them. This walks the
+  // page two steps down, one step back up, extracting after every move and
+  // merging as it goes.
+  //
+  // The back-step is what makes it thorough: it re-enters ground already
+  // covered, so a card that had not finished rendering on the way down gets a
+  // second look, and one that was unmounted was already banked by then.
+  //
+  // Nothing is clicked and nothing is fetched — this only moves the viewport,
+  // the way a person reading the page would, with jittered pauses.
+  // ---------------------------------------------------------------------------
+
+  const SWEEP_DEFAULTS = {
+    stepFraction: 0.5,      // of viewport height, per step
+    settleMinMs: 700,       // pause after each move, so lazy content renders
+    settleMaxMs: 1100,
+    stallRounds: 4,         // rounds with no new listing before stopping
+    maxRounds: 300,         // hard ceilings, so this can never run away
+    maxMs: 240000
+  };
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+
+  function jitter(min, max) {
+    return min + Math.random() * Math.max(0, max - min);
+  }
+
+  function atBottom() {
+    const doc = document.documentElement;
+    return window.scrollY + window.innerHeight >= doc.scrollHeight - 8;
+  }
+
+  async function sweep(options = {}) {
+    const cfg = Object.assign({}, SWEEP_DEFAULTS, options);
+    const onProgress = typeof cfg.onProgress === "function" ? cfg.onProgress : () => {};
+    const shouldStop = typeof cfg.shouldStop === "function" ? cfg.shouldStop : () => false;
+
+    const collected = new Map();
+    const startedAt = Date.now();
+    const startY = window.scrollY;
+    let rounds = 0;
+    let stalled = 0;
+    let reason = "complete";
+
+    const harvest = () => {
+      const { listings } = extractAll(document);
+      let added = 0;
+      for (const item of listings) {
+        const prev = collected.get(item.id);
+        if (!prev) { collected.set(item.id, item); added++; continue; }
+        // Keep filling gaps — a later pass may see a date the first one missed.
+        collected.set(item.id, {
+          ...prev,
+          title: prev.title || item.title,
+          formattedPrice: prev.formattedPrice || item.formattedPrice,
+          numericPrice: prev.numericPrice || item.numericPrice,
+          creationTimeMs: prev.creationTimeMs != null ? prev.creationTimeMs : item.creationTimeMs,
+          photoUrl: prev.photoUrl || item.photoUrl
+        });
+      }
+      return added;
+    };
+
+    const step = () => Math.max(120, Math.round(window.innerHeight * cfg.stepFraction));
+
+    harvest();
+    onProgress({ found: collected.size, rounds, phase: "start" });
+
+    while (true) {
+      if (shouldStop()) { reason = "cancelled"; break; }
+      if (rounds >= cfg.maxRounds) { reason = "max-rounds"; break; }
+      if (Date.now() - startedAt > cfg.maxMs) { reason = "timeout"; break; }
+
+      const heightBefore = document.documentElement.scrollHeight;
+
+      // Two steps down...
+      let added = 0;
+      let touchedBottom = false;
+      for (let i = 0; i < 2; i++) {
+        window.scrollBy({ top: step(), behavior: "smooth" });
+        await sleep(jitter(cfg.settleMinMs, cfg.settleMaxMs));
+        added += harvest();
+        if (atBottom()) touchedBottom = true;
+        if (shouldStop()) { reason = "cancelled"; break; }
+      }
+      if (reason === "cancelled") break;
+
+      // ...one step back up.
+      window.scrollBy({ top: -step(), behavior: "smooth" });
+      await sleep(jitter(cfg.settleMinMs, cfg.settleMaxMs));
+      added += harvest();
+
+      rounds++;
+      onProgress({ found: collected.size, rounds, phase: "scanning" });
+
+      stalled = added > 0 ? 0 : stalled + 1;
+
+      // Done only when we are at the bottom, the page stopped growing, and
+      // several rounds in a row turned up nothing new.
+      const grew = document.documentElement.scrollHeight > heightBefore;
+      if (!grew && touchedBottom && stalled >= cfg.stallRounds) {
+        reason = "complete";
+        break;
+      }
+      if (stalled >= cfg.stallRounds * 3) { reason = "stalled"; break; }
+    }
+
+    // Put the viewport back where the user left it, and let it land.
+    window.scrollTo({ top: startY, behavior: "smooth" });
+    await sleep(600);
+
+    const listings = Array.from(collected.values())
+      .map(l => Object.assign(l, { ageDays: ageDays(l.creationTimeMs) }));
+
+    onProgress({ found: listings.length, rounds, phase: "done", reason });
+    return { listings, rounds, reason, elapsedMs: Date.now() - startedAt };
+  }
+
   window.__rlfExtract = {
+    sweep,
     extractAll,
     sortGeometrically,
     directTextOnly,

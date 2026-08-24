@@ -1173,3 +1173,9 @@
 .rlf-listing-age.is-stale { color: #dc2626; font-weight: 600; }
 .rlf-listing-age.is-unknown { color: #94a3b8; font-style: italic; }
 .rlf-scan-status.is-partial { color: #0369a1; line-height: 1.35; }
+.rlf-chip.rlf-sweep {
+  width: 100%;
+  margin: 2px 0 8px;
+  background: #0f172a;
+}
+.rlf-chip.rlf-sweep:hover { background: #1e293b; }
