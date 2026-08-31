@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>NxtGen Deal Engine — Settings</title>
+  <style>
+    :root {
+      --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --line: #2a2f3a;
+      --text: #e6e9ef; --muted: #8b93a3; --accent: #ff9900;
+      --ok: #4ade80; --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; width: 480px; background: var(--bg); color: var(--text);
+      font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    header {
+      padding: 12px 14px; background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; gap: 8px;
+    }
+    header h1 { margin: 0; font-size: 14px; font-weight: 600; flex: 1; }
+    section { padding: 14px; border-bottom: 1px solid var(--line); }
+    h2 {
+      margin: 0 0 10px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted); font-weight: 600;
+    }
+    label { display: block; margin-bottom: 4px; font-size: 12px; color: var(--muted); }
+    input[type="text"], input[type="password"], input[type="number"] {
+      width: 100%; padding: 7px 9px; font: inherit;
+      background: var(--panel); color: var(--text);
+      border: 1px solid var(--line); border-radius: 6px;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+    .row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+    .row > div { flex: 1; }
+    button {
+      font: inherit; cursor: pointer; padding: 7px 12px;
+      background: var(--panel-2); color: var(--text);
+      border: 1px solid var(--line); border-radius: 6px;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); color: #1a1200; border-color: var(--accent); font-weight: 600; }
+    .hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .status { font-size: 12px; margin-top: 8px; min-height: 18px; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--danger); }
+
+    .toggle { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+    .toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .toggle span { font-size: 13px; }
+    .toggle small { display: block; color: var(--muted); font-size: 11px; }
+
+    .armed-warn {
+      background: rgba(248,113,113,.08);
+      border: 1px solid rgba(248,113,113,.3);
+      border-radius: 6px; padding: 9px 11px; margin-top: 9px;
+      font-size: 11px; color: #fca5a5;
+    }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .stat { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+    .stat span:last-child { color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header><h1>Deal Engine Settings</h1></header>
+
+  <section>
+    <h2>Gemini API key</h2>
+    <div class="row">
+      <div>
+        <label for="geminiKey">Key (stored in browser only, never in git)</label>
+        <input type="password" id="geminiKey" placeholder="AQ.…" autocomplete="off">
+      </div>
+      <button class="primary" id="saveKey">Save</button>
+    </div>
+    <div class="hint">
+      Entered once — it persists across browser and machine restarts. If a key has
+      ever appeared in a screenshot, chat, or commit, delete it in Google AI Studio
+      and paste a fresh one here.
+    </div>
+    <div class="status" id="keyStatus"></div>
+  </section>
+
+  <section>
+    <h2>Associate tag</h2>
+    <input type="text" id="assocTag" placeholder="nxtgenhotdeal-20">
+    <div class="hint">Every published link is rebuilt with this tag. Nothing posts without it.</div>
+  </section>
+
+  <section>
+    <h2>Autopilot</h2>
+    <div class="toggle">
+      <input type="checkbox" id="instantScan">
+      <span>Instant capture
+        <small>Generate a draft the moment a matching post appears</small>
+      </span>
+    </div>
+    <div class="toggle">
+      <input type="checkbox" id="autoPostArmed">
+      <span>Armed — post without review
+        <small>Only deals clearing every gate go out; the rest queue for you</small>
+      </span>
+    </div>
+    <div class="armed-warn" id="armedWarn" hidden>
+      Armed. Posts publish to your live feed unattended. Watch the queue for a day
+      before leaving this on — every post carries your tag and your name.
+    </div>
+
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <label for="maxAge">Max deal age (min)</label>
+        <input type="number" id="maxAge" min="5" max="720">
+      </div>
+      <div>
+        <label for="minGap">Min gap between posts (min)</label>
+        <input type="number" id="minGap" min="1" max="240">
+      </div>
+      <div>
+        <label for="maxHour">Max posts / hour</label>
+        <input type="number" id="maxHour" min="1" max="20">
+      </div>
+      <div>
+        <label for="maxDay">Max posts / day</label>
+        <input type="number" id="maxDay" min="1" max="200">
+      </div>
+      <div>
+        <label for="minDisc">Min discount %</label>
+        <input type="number" id="minDisc" min="0" max="90">
+      </div>
+      <div>
+        <label for="model">Gemini model</label>
+        <input type="text" id="model" placeholder="gemini-2.5-flash">
+      </div>
+    </div>
+    <button class="primary" id="saveSettings" style="margin-top:12px">Save settings</button>
+    <div class="status" id="setStatus"></div>
+  </section>
+
+  <section>
+    <h2>Activity</h2>
+    <div class="stat"><span>Posted, last hour</span><span id="statHour">—</span></div>
+    <div class="stat"><span>Posted, last 24h</span><span id="statDay">—</span></div>
+    <div class="stat"><span>Queued, awaiting review</span><span id="statQueue">—</span></div>
+    <button id="openQueue" style="margin-top:10px">Open deal queue</button>
+  </section>
+
+  <script src="../config.js"></script>
+  <script src="deal_settings.js"></script>
+</body>
+</html>

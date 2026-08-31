@@ -1,5 +1,15 @@
 importScripts('mediaDB.js');
 
+// NxtGen Deal Engine: shared link primitives + the redirect-chain resolver that
+// the x.com scanner calls into. Loaded here because content scripts can't follow
+// cross-origin redirect chains themselves.
+try {
+  importScripts('config.js', 'lib/deal_core.js', 'lib/deal_settings_sync.js',
+                'lib/deal_copy.js', 'lib/deal_ai.js', 'lib/deal_resolver.js');
+} catch (e) {
+  console.warn('[NxtGen] deal engine failed to load:', e);
+}
+
 // Keyboard-shortcut reload (Ctrl+Shift+Space, "global": true in manifest.json
 // "commands" so it fires even when Chrome isn't the focused window). Stamps a
 // timestamp flag before reloading; once the fresh service worker boots back

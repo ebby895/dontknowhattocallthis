@@ -27,16 +27,56 @@
          }
       }
    },
-   "content_scripts": [ {
-      "all_frames": false,
-      "js": [ "mediaDB.js", "content/shared_scrapers.js", "content/dom_helpers.js", "content/from_published_scraper.js", "content/scrape_actions.js", "content/event_bridge.js", "content/content_selling.js", "content/bulk_import_selling.js", "content/content_main.js" ],
-      "match_about_blank": false,
-      "matches": [ "https://www.facebook.com/marketplace/*", "https://m.facebook.com/marketplace/*" ],
-      "run_at": "document_idle"
-   } ],
+   "content_scripts": [
+      {
+         "all_frames": false,
+         "js": [
+            "mediaDB.js",
+            "content/shared_scrapers.js",
+            "content/dom_helpers.js",
+            "content/from_published_scraper.js",
+            "content/scrape_actions.js",
+            "content/event_bridge.js",
+            "content/content_selling.js",
+            "content/bulk_import_selling.js",
+            "content/content_main.js"
+         ],
+         "match_about_blank": false,
+         "matches": [
+            "https://www.facebook.com/marketplace/*",
+            "https://m.facebook.com/marketplace/*"
+         ],
+         "run_at": "document_idle"
+      },
+      {
+         "matches": [
+            "https://x.com/*",
+            "https://twitter.com/*"
+         ],
+         "js": [
+            "config.js",
+            "lib/deal_core.js",
+            "lib/deal_settings_sync.js",
+            "lib/deal_copy.js",
+            "content/x_autopost.js",
+            "content/x_deal_scanner.js"
+         ],
+         "run_at": "document_idle"
+      }
+   ],
    "description": "Marketplace automation tools for Facebook Marketplace sellers.",
    "homepage_url": "https://krash2501-cmyk.github.io/fast4mp-site/",
-   "host_permissions": [ "https://www.facebook.com/*", "https://m.facebook.com/*", "https://www.fbsbx.com/*" ],
+   "host_permissions": [
+      "https://www.facebook.com/*",
+      "https://m.facebook.com/*",
+      "https://www.fbsbx.com/*",
+      "https://x.com/*",
+      "https://twitter.com/*",
+      "https://www.amazon.com/*",
+      "https://amzn.to/*",
+      "https://a.co/*",
+      "https://generativelanguage.googleapis.com/*"
+   ],
    "icons": {
       "128": "images/icon128.png",
       "16": "images/icon16.png",
@@ -45,17 +85,43 @@
    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqmeCh2Z4+cIMCwsGzd9Jw0q4VeuElp3cSeC3qFTnRdcvcKyJRI50JHwvd+mblbw2lBNpk4WwVud1jpgnExX4lKiwIAh89nwUhjyCQD90nDzkUTOWvy4VY4BBohgOL4JaELojf04JXWNli53XmUMugA27yPj4pOYEw/ePhrHy97Szj1/ilMiL5des5XcpCV987LP4sa5L+iRNY+/dyjLJxoEsT5rZQDF85Cxw6sfd893HtQzwseVVWat7claQkoNTdDHtKJ8zPXqH3FxJ8B1RiQq1jQhRvQOcXsFFmWLE0fzlW23QaopUqsNgJd2Ftecb4XefSHvIOeDVCmZZpBMLMQIDAQAB",
    "manifest_version": 3,
    "name": "AutoList Pro: Facebook Marketplace",
-   "permissions": [ "tabs", "scripting", "storage", "alarms", "unlimitedStorage", "activeTab", "windows", "sidePanel", "notifications" ],
+   "permissions": [
+      "tabs",
+      "scripting",
+      "storage",
+      "alarms",
+      "unlimitedStorage",
+      "activeTab",
+      "windows",
+      "sidePanel",
+      "notifications"
+   ],
    "side_panel": {
       "default_path": "popup.html"
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
    "version": "1.8",
-   "web_accessible_resources": [ {
-      "matches": [ "https://www.facebook.com/*" ],
-      "resources": [ "popup.html", "styles.css", "images/*" ]
-   }, {
-      "matches": [ "https://www.facebook.com/*" ],
-      "resources": [ "content/bridge_page.js" ]
-   } ]
+   "web_accessible_resources": [
+      {
+         "matches": [
+            "https://www.facebook.com/*"
+         ],
+         "resources": [
+            "popup.html",
+            "styles.css",
+            "images/*"
+         ]
+      },
+      {
+         "matches": [
+            "https://www.facebook.com/*"
+         ],
+         "resources": [
+            "content/bridge_page.js"
+         ]
+      }
+   ],
+   "optional_host_permissions": [
+      "https://*/*"
+   ]
 }

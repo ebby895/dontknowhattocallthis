@@ -20,7 +20,28 @@ const CONFIG = {
   defaultToastDuration: 2500,
   enableAutoPublish: true,
   ffmEnableAutoActiveScan: true,
-  autoPruneCloudFiles: true // If true, automatically prune unused S3 files after sync
+  autoPruneCloudFiles: true, // If true, automatically prune unused S3 files after sync
+
+  // 🛒 NxtGen Deal Engine (Amazon Associates)
+  associateTag: "nxtgenhotdeal-20",
+  dealScannerEnabled: true,
+  // Only chains that terminate on an Amazon host are queued. Everything else
+  // (Walmart, Target, Best Buy, the redirector itself) is dropped at the gate.
+  dealMinDiscountPct: 15,       // below this, not worth a post
+  dealMaxAgeMinutes: 720,       // ignore deals older than 12h — price likely dead
+  dealLongFormPosts: false,     // true if the X account has Premium (>280 chars)
+  keepaApiKey: "",              // optional: real price history for discount verification
+
+  // 🤖 Autopilot — 24/7 unattended capture → generate → post
+  // NOTE: no API keys live in this file. It is committed to git. The Gemini key
+  // is entered in the extension settings and kept in chrome.storage.
+  geminiModel: "gemini-2.5-flash",
+  autoPostArmed: false,         // master switch; leave false until you've watched the queue
+  autoPostMaxAgeMinutes: 45,    // never auto-post a deal older than this
+  autoPostMinGapMinutes: 12,    // spacing between posts, so the feed reads human
+  autoPostMaxPerHour: 4,
+  autoPostMaxPerDay: 25,
+  instantScan: true             // process each new post on arrival instead of batching
 };
 
 console.log("[AutoList Pro] Config loaded:", CONFIG);
