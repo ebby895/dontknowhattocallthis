@@ -79,6 +79,16 @@ console.log('\nPromo code + mechanic parsing');
 check('code with colon', DC.extractPromoCode('Use code: SAVE25 at checkout'), 'SAVE25');
 check('promo code phrasing', DC.extractPromoCode('promo code 50OFFNOW today only'), '50OFFNOW');
 check('no code present', DC.extractPromoCode('Just a price drop, no code'), null);
+// Regression: a case-insensitive match turned "code needed" into a code named
+// NEEDED, which would put a fabricated instruction in front of buyers.
+check('prose after keyword is not a code',
+  DC.extractPromoCode('Price drop, no code needed'), null);
+check('lowercase word after keyword is not a code',
+  DC.extractPromoCode('Use code shown on the listing'), null);
+check('uppercase stopword rejected',
+  DC.extractPromoCode('Apply code AT CHECKOUT'), null);
+check('real code with digits still found',
+  DC.extractPromoCode('use code 20BLOWER at checkout'), '20BLOWER');
 check('clip coupon detected', DC.detectMechanic('Clip the 40% coupon on the listing'), 'clip_coupon');
 check('checkout code detected', DC.detectMechanic('Apply code SAVE25 at checkout'), 'checkout_code');
 check('lightning detected', DC.detectMechanic('Lightning deal live now'), 'lightning');
