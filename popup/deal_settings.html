@@ -73,11 +73,14 @@
         <input type="password" id="geminiKey" placeholder="AQ.…" autocomplete="off">
       </div>
       <button class="primary" id="saveKey">Save</button>
+      <button id="loadKeyFile">From file…</button>
     </div>
+    <input type="file" id="keyFileInput" accept=".txt,.env,.key,text/plain" hidden>
     <div class="hint">
-      Entered once — it persists across browser and machine restarts. If a key has
+      Entered once — it persists across browser and machine restarts. "From file…"
+      reads a .txt you already saved, so you never have to type it. If a key has
       ever appeared in a screenshot, chat, or commit, delete it in Google AI Studio
-      and paste a fresh one here.
+      and load a fresh one.
     </div>
     <div class="status" id="keyStatus"></div>
   </section>

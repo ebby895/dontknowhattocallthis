@@ -449,14 +449,14 @@ class MainWindow(QMainWindow):
         self.in_gemini.setPlaceholderText(
             f"Saved ({existing[:6]}…{existing[-4:]})" if existing else "AQ.…"
         )
-        form.addRow("Gemini key", self.in_gemini)
+        form.addRow("Gemini key", self._key_row(self.in_gemini, "gemini"))
 
         self.in_keepa = QLineEdit()
         self.in_keepa.setEchoMode(QLineEdit.EchoMode.Password)
         self.in_keepa.setPlaceholderText(
             "Saved" if self.config.keepa_key else "optional — verifies real discounts"
         )
-        form.addRow("Keepa key", self.in_keepa)
+        form.addRow("Keepa key", self._key_row(self.in_keepa, "keepa"))
         secrets.add_layout(form)
 
         note = QLabel(
@@ -588,6 +588,82 @@ class MainWindow(QMainWindow):
         else:
             self.lbl_armed.setText("Review mode — nothing posts on its own")
             self.lbl_armed.setStyleSheet(f"color: {Palette.TEXT_DIM};")
+
+    def _key_row(self, field: QLineEdit, kind: str) -> QWidget:
+        """A key field with a 'from file…' button beside it.
+
+        Typing a long key into a password field is where people get stuck, and
+        pasting one into a chat window is how keys leak. This reads the file the
+        user already saved, locally.
+        """
+        holder = QWidget()
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addWidget(field, 1)
+
+        browse = QPushButton(icon("external", Palette.TEXT, 15), "  From file…")
+        browse.setToolTip("Pick the .txt file containing the key")
+        browse.clicked.connect(lambda: self._load_key_from_file(kind))
+        row.addWidget(browse)
+
+        return holder
+
+    def _load_key_from_file(self, kind: str) -> None:
+        from ..keyfile import read_key_file, shred
+
+        label = "Gemini" if kind == "gemini" else "Keepa"
+        path, _ = QFileDialog.getOpenFileName(
+            self, f"Select the file containing your {label} key", "",
+            "Text files (*.txt *.env *.key);;All files (*)",
+        )
+        if not path:
+            return
+
+        result = read_key_file(path, kind)
+        if not result.ok:
+            QMessageBox.warning(self, "Could not read the key", result.reason)
+            return
+
+        secret_name = "gemini_api_key" if kind == "gemini" else "keepa_api_key"
+        if not self.config.set_secret(secret_name, result.key):
+            QMessageBox.critical(
+                self, "Not saved",
+                "The key was read but could not be stored. Install keyring:\n\n"
+                "    pip install keyring",
+            )
+            return
+
+        field = self.in_gemini if kind == "gemini" else self.in_keepa
+        field.clear()
+        field.setPlaceholderText(f"Saved ({result.masked})")
+
+        # A key in a plaintext file is the risk we are trying to remove, so
+        # offer to clear it now while the user is here.
+        answer = QMessageBox.question(
+            self, f"{label} key saved",
+            f"Saved {result.masked} to the credential manager.\n"
+            "You will not need to enter it again.\n\n"
+            f"Delete the file now?\n{Path(path).name}\n\n"
+            "Leaving a key in a plaintext file is the main way they leak.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+
+        if answer == QMessageBox.StandardButton.Yes:
+            ok, reason = shred(path)
+            if ok:
+                self.statusBar().showMessage(
+                    f"{label} key saved; source file deleted", 6000
+                )
+            else:
+                QMessageBox.warning(
+                    self, "File not deleted",
+                    f"The key is saved, but the file could not be removed:\n{reason}\n\n"
+                    "Delete it by hand when you can.",
+                )
+        else:
+            self.statusBar().showMessage(f"{label} key saved", 5000)
 
     def _save_keys(self) -> None:
         saved = []

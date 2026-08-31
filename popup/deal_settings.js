@@ -51,6 +51,84 @@
     }
   }
 
+  // --- Load a key from a file the user already saved ------------------------
+  // Typing a long key into a password field is where people get stuck, and
+  // pasting one into a chat window is how keys leak. Reading the file happens
+  // entirely in the browser; nothing is uploaded.
+
+  // Tolerate the shapes people actually save: a bare key, KEY=value, an .env
+  // line, a JSON-ish "key": "value", or a labelled line.
+  const ASSIGNMENT_RE =
+    /^\s*(?:export\s+)?["']?[A-Za-z_][A-Za-z0-9_ .-]*["']?\s*[:=]\s*["']?([^"'\s,]+)["']?\s*,?\s*$/;
+  const GEMINI_SHAPE = /^(?:AQ\.[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,})$/;
+  const MAX_KEY_FILE_BYTES = 64 * 1024;
+
+  function parseKeyText(text) {
+    for (const raw of String(text || '').split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#') || line.startsWith('//')) continue;
+
+      const m = line.match(ASSIGNMENT_RE);
+      const candidate = m ? m[1] : line.replace(/^["',]+|["',]+$/g, '');
+
+      // Only a bare token can be a key; a sentence is prose left in the file.
+      if (candidate && !/\s/.test(candidate) && candidate.length >= 16) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  function maskKey(k) {
+    if (!k) return '';
+    return k.length <= 12
+      ? k.slice(0, 2) + '…' + k.slice(-2)
+      : k.slice(0, 6) + '…' + k.slice(-4);
+  }
+
+  $('loadKeyFile').addEventListener('click', () => $('keyFileInput').click());
+
+  $('keyFileInput').addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = '';           // allow re-picking the same file
+    if (!file) return;
+
+    if (file.size === 0) {
+      return flash($('keyStatus'), 'That file is empty.', false);
+    }
+    if (file.size > MAX_KEY_FILE_BYTES) {
+      return flash($('keyStatus'),
+        'That file is too large to be a key file — pick the .txt with just the key.',
+        false);
+    }
+
+    let text;
+    try {
+      text = await file.text();
+    } catch (e) {
+      return flash($('keyStatus'), 'Could not read that file.', false);
+    }
+
+    const key = parseKeyText(text);
+    if (!key) {
+      return flash($('keyStatus'),
+        'No key found in that file. It should hold the key on its own line, ' +
+        'or a line like GEMINI_API_KEY=…', false);
+    }
+    // Reject unrelated text rather than storing a key that fails every request.
+    if (!GEMINI_SHAPE.test(key)) {
+      return flash($('keyStatus'),
+        "That does not look like a Gemini key (starts with 'AQ.' or 'AIza'). " +
+        'Nothing was saved.', false);
+    }
+
+    await set({ [KEY_STORE]: key });
+    await loadKey();
+    flash($('keyStatus'),
+      `Saved ${maskKey(key)} from ${file.name}. Delete that file — a key in a ` +
+      'plaintext file is how they leak.', true);
+  });
+
   $('saveKey').addEventListener('click', async () => {
     const v = $('geminiKey').value.trim();
     if (!v) return flash($('keyStatus'), 'Enter a key first.', false);

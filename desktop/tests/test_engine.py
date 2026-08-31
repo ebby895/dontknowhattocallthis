@@ -435,5 +435,107 @@ class TestAiValidation(unittest.TestCase):
         self.assertIn("url", reason)
 
 
+class TestKeyFile(unittest.TestCase):
+    """Reading a key out of a file the user saved, without them typing it."""
+
+    def setUp(self):
+        from nxtgen import keyfile
+        self.kf = keyfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        # Shape-valid but fabricated, so nothing real appears in the repo.
+        self.gemini = "AQ.Ab8RN6" + "X" * 30
+        self.keepa = "a1b2c3d4" * 6
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write(self, name: str, content: str) -> Path:
+        p = self.dir / name
+        p.write_text(content, encoding="utf-8")
+        return p
+
+    def test_bare_key_on_its_own_line(self):
+        p = self._write("key.txt", self.gemini + "\n")
+        r = self.kf.read_key_file(p, "gemini")
+        self.assertTrue(r.ok, r.reason)
+        self.assertEqual(r.key, self.gemini)
+
+    def test_env_style_assignment(self):
+        p = self._write("key.txt", f"GEMINI_API_KEY={self.gemini}\n")
+        self.assertEqual(self.kf.read_key_file(p, "gemini").key, self.gemini)
+
+    def test_export_and_quotes(self):
+        p = self._write("key.env", f'export GEMINI_API_KEY="{self.gemini}"\n')
+        self.assertEqual(self.kf.read_key_file(p, "gemini").key, self.gemini)
+
+    def test_json_style_line(self):
+        p = self._write("key.txt", f'  "api_key": "{self.gemini}",\n')
+        self.assertEqual(self.kf.read_key_file(p, "gemini").key, self.gemini)
+
+    def test_label_with_spaces(self):
+        p = self._write("key.txt", f"API Key: {self.gemini}\n")
+        self.assertEqual(self.kf.read_key_file(p, "gemini").key, self.gemini)
+
+    def test_comments_and_blank_lines_skipped(self):
+        p = self._write("key.txt", f"# my gemini key\n\n{self.gemini}\n")
+        self.assertEqual(self.kf.read_key_file(p, "gemini").key, self.gemini)
+
+    def test_prose_is_rejected(self):
+        """A file of notes must not be stored as a key that fails every call."""
+        p = self._write("notes.txt", "remember to get the key from google later")
+        r = self.kf.read_key_file(p, "gemini")
+        self.assertFalse(r.ok)
+        self.assertIn("No key found", r.reason)
+
+    def test_wrong_shape_rejected(self):
+        p = self._write("key.txt", "sk-proj-thisisanopenaikeynotgemini123456")
+        r = self.kf.read_key_file(p, "gemini")
+        self.assertFalse(r.ok)
+        self.assertIn("AQ.", r.reason)
+        self.assertIsNone(r.key)
+
+    def test_aiza_form_accepted(self):
+        aiza = "AIza" + "B" * 35
+        p = self._write("key.txt", aiza)
+        self.assertTrue(self.kf.read_key_file(p, "gemini").ok)
+
+    def test_keepa_shape(self):
+        p = self._write("keepa.txt", self.keepa)
+        self.assertTrue(self.kf.read_key_file(p, "keepa").ok)
+        p2 = self._write("bad.txt", self.gemini)
+        self.assertFalse(self.kf.read_key_file(p2, "keepa").ok)
+
+    def test_empty_and_missing_files(self):
+        empty = self._write("empty.txt", "")
+        self.assertIn("empty", self.kf.read_key_file(empty, "gemini").reason)
+        missing = self.dir / "nope.txt"
+        self.assertFalse(self.kf.read_key_file(missing, "gemini").ok)
+
+    def test_oversized_file_rejected(self):
+        p = self._write("huge.txt", "x" * (65 * 1024))
+        r = self.kf.read_key_file(p, "gemini")
+        self.assertFalse(r.ok)
+        self.assertIn("too large", r.reason)
+
+    def test_masked_shows_ends_only(self):
+        p = self._write("key.txt", self.gemini)
+        masked = self.kf.read_key_file(p, "gemini").masked
+        self.assertTrue(masked.startswith("AQ.Ab8"))
+        self.assertTrue(masked.endswith(self.gemini[-4:]))
+        self.assertNotIn(self.gemini, masked)
+
+    def test_shred_removes_the_file(self):
+        p = self._write("key.txt", self.gemini)
+        ok, reason = self.kf.shred(p)
+        self.assertTrue(ok, reason)
+        self.assertFalse(p.exists())
+
+    def test_shred_missing_file_is_not_an_error_crash(self):
+        ok, reason = self.kf.shred(self.dir / "gone.txt")
+        self.assertFalse(ok)
+        self.assertIn("already gone", reason)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
