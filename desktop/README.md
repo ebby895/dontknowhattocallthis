@@ -7,7 +7,23 @@ associate tag, writes original copy, and posts it.
 Standalone — it shares no code with the Chrome extension in the repo root. Either
 can run on its own.
 
-## Install
+## Run it
+
+**Double-click `Start NxtGen.bat`** in this folder.
+
+First run takes a few minutes: it builds a private environment beside the file,
+installs the dependencies and downloads Chromium. Every run after that goes
+straight into the app. If anything fails, the window stays open with the error
+in it rather than vanishing.
+
+Needs Python installed — get it from [python.org](https://www.python.org/downloads/)
+and **tick "Add python.exe to PATH"** on the installer's first screen. The
+launcher checks for it and tells you if it's missing.
+
+Everything lives inside this folder: deleting `.venv` undoes the install.
+
+<details>
+<summary>Manual install (macOS, Linux, or if you prefer a terminal)</summary>
 
 ```
 cd desktop
@@ -15,6 +31,7 @@ pip install -r requirements.txt
 playwright install chromium
 python run.py
 ```
+</details>
 
 First launch opens a Chrome window on x.com. **Sign in once** — the profile keeps
 the session, so you never sign in again.
