@@ -4,3 +4,7 @@ Thumbs.db
 *.log
 node_modules/
 .tmp.driveupload/
+__pycache__/
+*.pyc
+desktop/**/__pycache__/
+desktop/.venv/
