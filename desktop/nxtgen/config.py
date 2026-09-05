@@ -39,8 +39,23 @@ class Settings:
     # --- capture --------------------------------------------------------
     # Playwright drives a persistent Chrome profile so the x.com session is a
     # real logged-in session rather than a scraped one.
+    #
+    # browser_channel picks which browser binary: "chrome" uses the Google
+    # Chrome already installed on this machine (no extra download); "chromium"
+    # uses Playwright's own bundled build. Chrome is the default because it is
+    # already there and it is what the user actually browses with.
+    browser_channel: str = "chrome"
     browser_profile: str = ""            # blank -> app_dir()/chrome-profile
     headless: bool = False
+
+    # Advanced: attach to a Chrome you started yourself with
+    #   chrome.exe --remote-debugging-port=9222
+    # instead of launching one. Use this when you want the engine working inside
+    # your everyday Chrome profile - already signed in, extensions loaded -
+    # rather than the separate profile it otherwise keeps. Chrome locks a
+    # profile while it is running, which is why attaching is the only way to
+    # share the one you browse with.
+    cdp_endpoint: str = ""               # e.g. "http://localhost:9222"
     scan_interval_seconds: float = 3.0
     timeline_url: str = "https://x.com/home"
     following_tab_only: bool = True

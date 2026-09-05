@@ -101,7 +101,11 @@ class Engine:
         s = self.config.settings
 
         self._capture = TimelineCapture(
-            s.profile_path, headless=s.headless, timeline_url=s.timeline_url
+            s.profile_path,
+            headless=s.headless,
+            timeline_url=s.timeline_url,
+            channel=s.browser_channel,
+            cdp_endpoint=s.cdp_endpoint,
         )
         self._emit("status", "Launching browser…")
         await self._capture.start()

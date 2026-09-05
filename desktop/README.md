@@ -11,10 +11,13 @@ can run on its own.
 
 **Double-click `Start NxtGen.bat`** in this folder.
 
-First run takes a few minutes: it builds a private environment beside the file,
-installs the dependencies and downloads Chromium. Every run after that goes
-straight into the app. If anything fails, the window stays open with the error
-in it rather than vanishing.
+First run takes a couple of minutes: it builds a private environment beside the
+file and installs the dependencies. Every run after that goes straight into the
+app. If anything fails, the window stays open with the error in it rather than
+vanishing.
+
+It drives the **Google Chrome already on your machine** — no second browser is
+downloaded.
 
 Needs Python installed — get it from [python.org](https://www.python.org/downloads/)
 and **tick "Add python.exe to PATH"** on the installer's first screen. The
@@ -28,13 +31,40 @@ Everything lives inside this folder: deleting `.venv` undoes the install.
 ```
 cd desktop
 pip install -r requirements.txt
-playwright install chromium
 python run.py
 ```
 </details>
 
-First launch opens a Chrome window on x.com. **Sign in once** — the profile keeps
-the session, so you never sign in again.
+First launch opens Chrome on x.com. **Sign in once** — the profile keeps the
+session, so you never sign in again.
+
+## Which browser it drives
+
+By default it launches your installed **Google Chrome** with a dedicated profile
+kept in the app's data folder. Separate from your everyday profile, so the
+engine's activity never disturbs your normal browsing and the two can't fight
+over the same profile lock.
+
+Two settings in `settings.json` change this:
+
+| Setting | Effect |
+|---|---|
+| `browser_channel: "chrome"` | default — your installed Chrome |
+| `browser_channel: "chromium"` | Playwright's bundled build; needs `playwright install chromium` first |
+| `cdp_endpoint: "http://localhost:9222"` | attach to a Chrome you started yourself |
+
+**Using your everyday profile.** Chrome locks a profile while it's running, so
+the only way to work inside the one you actually browse with — already signed
+into X, extensions loaded — is to start Chrome yourself with the DevTools port
+open and point the app at it:
+
+```
+chrome.exe --remote-debugging-port=9222
+```
+
+then set `cdp_endpoint` to `http://localhost:9222`. The app attaches to that
+Chrome, reuses an open x.com tab if there is one, and on shutdown disconnects
+rather than closing your browser.
 
 ## Setup
 

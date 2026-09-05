@@ -5,9 +5,12 @@ title NxtGen Deal Engine
 rem ---------------------------------------------------------------------------
 rem Double-click launcher for the NxtGen Deal Engine.
 rem
-rem First run: creates a private virtual environment next to this file, installs
-rem the dependencies and downloads Chromium. Takes a few minutes.
+rem First run: creates a private virtual environment next to this file and
+rem installs the dependencies. Takes a couple of minutes.
 rem Every run after that: launches straight into the app.
+rem
+rem It drives the Google Chrome already installed on this machine - no separate
+rem browser is downloaded.
 rem
 rem The venv keeps everything inside this folder, so nothing is installed into
 rem the system Python and removing the folder removes all of it.
@@ -51,12 +54,12 @@ rem --- First-run setup -------------------------------------------------------
 
 if exist "%STAMP%" goto :launch
 
-echo   First run - setting up. This takes a few minutes.
+echo   First run - setting up. This takes a couple of minutes.
 echo   You only have to wait through this once.
 echo.
 
 if not exist "%VENV%" (
-    echo   [1/3] Creating the environment...
+    echo   [1/2] Creating the environment...
     %PY% -m venv "%VENV%"
     if errorlevel 1 (
         echo.
@@ -68,7 +71,7 @@ if not exist "%VENV%" (
     )
 )
 
-echo   [2/3] Installing dependencies...
+echo   [2/2] Installing dependencies...
 call "%VENV%\Scripts\python.exe" -m pip install --upgrade pip --quiet
 call "%VENV%\Scripts\python.exe" -m pip install -r requirements.txt
 if errorlevel 1 (
@@ -80,15 +83,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo   [3/3] Downloading the browser...
-call "%VENV%\Scripts\python.exe" -m playwright install chromium
+rem No browser download: Playwright drives the installed Google Chrome via
+rem channel="chrome". Warn early if Chrome is not where Windows records it,
+rem rather than failing later at launch.
+reg query "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe" >nul 2>&1
 if errorlevel 1 (
-    echo.
-    echo   Browser download failed - check your internet connection.
-    echo   Copy the error above and send it to Claude.
-    echo.
-    pause
-    exit /b 1
+    reg query "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe" >nul 2>&1
+    if errorlevel 1 (
+        echo.
+        echo   NOTE: Google Chrome was not found on this machine.
+        echo   The app drives your installed Chrome, so install it from
+        echo   https://www.google.com/chrome/ before starting the engine.
+        echo.
+    )
 )
 
 echo. > "%STAMP%"
@@ -101,7 +108,7 @@ rem --- Launch ----------------------------------------------------------------
 :launch
 echo   Starting...
 echo.
-echo   A Chrome window will open on x.com. If you are not signed in,
+echo   Your Chrome will open on x.com. If you are not signed in,
 echo   sign in there once - it is remembered from then on.
 echo.
 

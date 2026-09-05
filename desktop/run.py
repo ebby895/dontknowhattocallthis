@@ -22,8 +22,9 @@ def main() -> int:
         from nxtgen.ui.app import run
     except ImportError as exc:
         print(f"Missing dependency: {exc}\n\nInstall with:\n"
-              "    pip install -r requirements.txt\n"
-              "    playwright install chromium\n", file=sys.stderr)
+              "    pip install -r requirements.txt\n\n"
+              "The app drives the Google Chrome already installed on this "
+              "machine, so there is no browser to download.\n", file=sys.stderr)
         return 1
     return run()
 

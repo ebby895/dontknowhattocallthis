@@ -87,11 +87,15 @@ class TimelineCapture:
     """Owns the browser. Start once, poll, stop on shutdown."""
 
     def __init__(self, profile_dir: Path, *, headless: bool = False,
-                 timeline_url: str = "https://x.com/home"):
+                 timeline_url: str = "https://x.com/home",
+                 channel: str = "chrome", cdp_endpoint: str = ""):
         self.profile_dir = Path(profile_dir)
         self.headless = headless
         self.timeline_url = timeline_url
+        self.channel = channel
+        self.cdp_endpoint = cdp_endpoint
         self._pw = None
+        self._browser = None            # set only in the CDP-attach path
         self._context = None
         self._page = None
         self._seen: set[str] = set()
@@ -99,23 +103,83 @@ class TimelineCapture:
     async def start(self) -> None:
         from playwright.async_api import async_playwright
 
-        self.profile_dir.mkdir(parents=True, exist_ok=True)
         self._pw = await async_playwright().start()
 
-        # A persistent context keeps cookies between runs, so the operator signs
-        # in once rather than every launch.
-        self._context = await self._pw.chromium.launch_persistent_context(
-            str(self.profile_dir),
+        if self.cdp_endpoint:
+            await self._attach()
+        else:
+            await self._launch()
+
+        await self._page.goto(self.timeline_url, wait_until="domcontentloaded")
+        log.info("Timeline capture started on %s", self.timeline_url)
+
+    async def _launch(self) -> None:
+        """Launch a browser with our own persistent profile.
+
+        The profile keeps cookies between runs, so the operator signs in once
+        rather than every launch. channel="chrome" uses the Google Chrome
+        already installed on the machine; "chromium" falls back to Playwright's
+        bundled build.
+        """
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
+
+        kwargs = dict(
             headless=self.headless,
             viewport={"width": 1400, "height": 1000},
             args=["--disable-blink-features=AutomationControlled"],
         )
+        if self.channel and self.channel != "chromium":
+            kwargs["channel"] = self.channel
+
+        try:
+            self._context = await self._pw.chromium.launch_persistent_context(
+                str(self.profile_dir), **kwargs
+            )
+        except Exception as exc:
+            # Chrome not installed, or installed somewhere Playwright cannot
+            # find. Say which browser was missing rather than surfacing
+            # Playwright's raw error.
+            if "channel" in kwargs:
+                raise RuntimeError(
+                    f"Could not start Google Chrome ({exc}). Install Chrome, or "
+                    "set browser_channel to \"chromium\" in settings.json to use "
+                    "Playwright's bundled browser instead."
+                ) from exc
+            raise
+
         self._page = (
             self._context.pages[0] if self._context.pages
             else await self._context.new_page()
         )
-        await self._page.goto(self.timeline_url, wait_until="domcontentloaded")
-        log.info("Timeline capture started on %s", self.timeline_url)
+
+    async def _attach(self) -> None:
+        """Attach to a Chrome the operator started themselves.
+
+        Chrome locks a profile while it is running, so attaching over the
+        DevTools port is the only way to work inside the everyday profile -
+        already signed in, extensions loaded - instead of a separate one.
+        """
+        try:
+            self._browser = await self._pw.chromium.connect_over_cdp(self.cdp_endpoint)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not attach to Chrome at {self.cdp_endpoint} ({exc}). "
+                "Start Chrome with:  chrome.exe --remote-debugging-port=9222"
+            ) from exc
+
+        self._context = (
+            self._browser.contexts[0] if self._browser.contexts
+            else await self._browser.new_context()
+        )
+
+        # Reuse an x.com tab if one is already open, rather than piling up tabs
+        # every time the engine restarts.
+        for page in self._context.pages:
+            if "x.com" in (page.url or "") or "twitter.com" in (page.url or ""):
+                self._page = page
+                break
+        else:
+            self._page = await self._context.new_page()
 
     async def is_logged_in(self) -> bool:
         if not self._page:
@@ -201,13 +265,19 @@ class TimelineCapture:
         return self._page
 
     async def stop(self) -> None:
-        for closer in (
-            getattr(self._context, "close", None),
-            getattr(self._pw, "stop", None),
-        ):
+        # When attached over CDP the browser is the operator's own - disconnect
+        # from it, never close it, or we would shut their Chrome down.
+        if self.cdp_endpoint:
+            closers = [getattr(self._browser, "close", None),
+                       getattr(self._pw, "stop", None)]
+        else:
+            closers = [getattr(self._context, "close", None),
+                       getattr(self._pw, "stop", None)]
+
+        for closer in closers:
             if closer:
                 try:
                     await closer()
                 except Exception:
                     pass
-        self._context = self._page = self._pw = None
+        self._browser = self._context = self._page = self._pw = None
