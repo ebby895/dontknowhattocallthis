@@ -1,0 +1,47 @@
+{
+   "manifest_version": 3,
+   "name": "NxtGen Deal Engine",
+   "version": "1.0.0",
+   "description": "Captures Amazon deals from your x.com Following feed, retags them with your associate ID, and drafts original posts.",
+   "background": {
+      "service_worker": "background.js"
+   },
+   "permissions": [
+      "storage",
+      "tabs",
+      "alarms",
+      "unlimitedStorage"
+   ],
+   "host_permissions": [
+      "https://x.com/*",
+      "https://twitter.com/*",
+      "https://www.amazon.com/*",
+      "https://amzn.to/*",
+      "https://a.co/*",
+      "https://generativelanguage.googleapis.com/*"
+   ],
+   "optional_host_permissions": [
+      "https://*/*"
+   ],
+   "content_scripts": [
+      {
+         "matches": [
+            "https://x.com/*",
+            "https://twitter.com/*"
+         ],
+         "js": [
+            "config.js",
+            "lib/deal_core.js",
+            "lib/deal_settings_sync.js",
+            "lib/deal_copy.js",
+            "content/x_autopost.js",
+            "content/x_deal_scanner.js"
+         ],
+         "run_at": "document_idle"
+      }
+   ],
+   "action": {
+      "default_title": "NxtGen Deal Engine",
+      "default_popup": "popup/deal_queue.html"
+   }
+}

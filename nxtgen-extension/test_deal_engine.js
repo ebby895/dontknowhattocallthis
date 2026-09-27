@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const root = path.resolve(__dirname, '..');
+const root = __dirname;
 
 // Minimal chrome shim so the modules' guarded API calls no-op cleanly.
 const sandbox = {
